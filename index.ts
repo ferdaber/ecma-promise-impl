@@ -1,9 +1,37 @@
-type CompletionType = 'normal' | 'throw'
 type PromizeReactionType = 'fulfill' | 'reject'
 type PromizeState = 'pending' | 'rejected' | 'fulfilled'
 
 function isObject(value: any): boolean {
   return value !== null && typeof value === 'object'
+}
+
+// https://tc39.github.io/ecma262/#sec-promise-executor
+class Promize<T, E> {
+  _promiseState: PromizeState = 'pending'
+  _promiseResult!: T | E
+  _promiseFulfillReactions: PromizeReaction<T>[] | undefined = []
+  _promiseRejectReactions: PromizeReaction<E>[] | undefined = []
+  _promiseIsHandled: boolean = false
+
+  constructor(executor: (resolve: (value: T) => void, reject: (reason: E) => void) => void) {
+    const resolvingFunctions = createResolvingFunctions(this)
+    try {
+      executor(resolvingFunctions.resolve, resolvingFunctions.reject)
+    } catch (completion) {
+      resolvingFunctions.reject(completion)
+    }
+  }
+
+  // https://tc39.github.io/ecma262/#sec-promise.prototype.then
+  then(onFulfilled: (resolution: T) => void, onRejected: (reason: E) => void): any {
+    const resultCapability = new PromizeCapability<T, E>(Promize)
+    return performPromiseThen(this, onFulfilled, onRejected, resultCapability)
+  }
+
+  // https://tc39.github.io/ecma262/#sec-promise.resolve
+  static resolve<T>(value: T) {
+    return promiseResolve(this, value)
+  }
 }
 
 // https://tc39.github.io/ecma262/#sec-promisecapability-records
@@ -34,35 +62,6 @@ class PromizeReaction<T> {
     public _handler: ((value: T) => any) | undefined,
     public _type: PromizeReactionType
   ) {}
-}
-
-// https://tc39.github.io/ecma262/#sec-promise-executor
-class Promize<T, E> {
-  _promiseState: PromizeState = 'pending'
-  _promiseResult!: T | E
-  _promiseFulfillReactions: PromizeReaction<T>[] | undefined = []
-  _promiseRejectReactions: PromizeReaction<E>[] | undefined = []
-  _promiseIsHandled: boolean = false
-
-  constructor(executor: (resolve: (value: T) => void, reject: (reason: E) => void) => void) {
-    const resolvingFunctions = createResolvingFunctions(this)
-    try {
-      executor(resolvingFunctions.resolve, resolvingFunctions.reject)
-    } catch (completion) {
-      resolvingFunctions.reject(completion)
-    }
-  }
-
-  // https://tc39.github.io/ecma262/#sec-promise.prototype.then
-  then(onFulfilled: (resolution: T) => void, onRejected: (reason: E) => void): any {
-    const resultCapability = new PromizeCapability<T, E>(Promize)
-    return performPromiseThen(this, onFulfilled, onRejected, resultCapability)
-  }
-
-  // https://tc39.github.io/ecma262/#sec-promise.resolve
-  static resolve<T>(value: T) {
-    return promiseResolve(this, value)
-  }
 }
 
 // https://tc39.github.io/ecma262/#sec-performpromisethen
